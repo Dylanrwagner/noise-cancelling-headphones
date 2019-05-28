@@ -5,10 +5,12 @@ use std::collections::VecDeque;
 
 const BUF_SIZE: usize = 1024;
 
+///Take audio from the device's current default input and output a phase-reversed
+/// version to default audio output, creating a noise-cancelling effect. 
+
 fn main() {
     //Set up seperate thread for input and output
     let (tx, rx) = mpsc::channel();
-    
 
     //Spawn thread that reads input and sends it to output thread
     thread::spawn(|| {
@@ -22,24 +24,25 @@ fn main() {
         event_loop_in.run(move |_, stream_data| {
             //catch input in u16, i16, or f32 format
             match stream_data {
-                StreamData::Input { buffer: UnknownTypeInputBuffer::U16(mut buffer) } => {
+                StreamData::Input { buffer: UnknownTypeInputBuffer::U16(buffer) } => {
                     for elem in buffer.iter() {
                         tx.send(*elem as f32).expect("input thread failed on send u16");
                     }
                     println!("input U16");
                     //println!();
                 },
-                StreamData::Input { buffer: UnknownTypeInputBuffer::I16(mut buffer) } => {
+                StreamData::Input { buffer: UnknownTypeInputBuffer::I16(buffer) } => {
                     for elem in buffer.iter() {
                         tx.send(*elem as f32).expect("input thread failed on send i16");
                     }
                     println!("input I16");
                     //println!();
                 },
-                StreamData::Input { buffer: UnknownTypeInputBuffer::F32(mut buffer) } => {
+                StreamData::Input { buffer: UnknownTypeInputBuffer::F32(buffer) } => {
                     for elem in buffer.iter() {
                         tx.send(*elem).expect("input thread failed on send f32");
                     }
+                    println!("input F32");
                     //println!();
                 },
                 _ => println!("no input"),
@@ -67,7 +70,7 @@ fn main() {
                 for elem in buffer.iter_mut() {
                     match buf.pop_front() {
                         Some(i) => *elem = -i as u16,
-                        None => (),
+                        None => (), //Silently drop the sample if buffer is empty (not sure why this is happening)
                     }
                     //*elem = -buf.pop_front().expect("pop failed in u16") as u16;
                     //*elem = -rx.recv().expect("pop failed in u16") as u16;

@@ -3,10 +3,13 @@ use std::thread;
 use std::sync::mpsc;
 use std::collections::VecDeque;
 
+mod calibrate;
+
 const BUF_SIZE: usize = 1024;
 
 ///Take audio from the device's current default input and output a phase-reversed
 /// version to default audio output, creating a noise-cancelling effect. 
+/// Requires an additional input device inside the headphones to calculate delay and amplitude
 
 fn main() {
     //Set up seperate thread for input and output
@@ -74,9 +77,9 @@ fn main() {
                     }
                     //*elem = -buf.pop_front().expect("pop failed in u16") as u16;
                     //*elem = -rx.recv().expect("pop failed in u16") as u16;
-                    //println!("output {:?}", elem);
+                    println!("output {:?}", elem);
                 }
-                println!("Output u16");
+                //println!("Output u16");
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
                 for elem in buffer.iter_mut() {
@@ -86,9 +89,9 @@ fn main() {
                     }
                     //*elem = -buf.pop_front().expect("pop failed in i16") as i16;
                     //*elem = -rx.recv().expect("pop failed in u16") as i16;
-                    //println!("output {:?}", elem);
+                    println!("output {:?}", elem);
                 }
-                println!("Output i16");
+                //println!("Output i16");
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
                 for elem in buffer.iter_mut() {
@@ -98,9 +101,9 @@ fn main() {
                     }
                     //*elem = -buf.pop_front().expect("pop failed in f32 section");
                     //*elem = -rx.recv().expect("pop failed in u16");
-                    //println!("output {:?}", elem);
+                    println!("output {:?}", elem);
                 }
-                println!("output f32");
+                //println!("output f32");
             },
             _ => println!("no output"),
         };

@@ -18,7 +18,7 @@ fn main() {
     //set up default input device, which will act as the means to cancel the noise
     let default_in = default_input_device().expect("Error finding default input");
     let in_format = default_in.default_input_format().expect("Error getting default input format");
-    let SampleRate(samp_rate) = in_format.sample_rate;
+    //let SampleRate(samp_rate) = in_format.sample_rate;
 
     //A second input device inside the headphones to find some noise-cancelling parameters
     // assumes it, the default input device, and the built-in mic are the only input devices

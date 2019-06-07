@@ -33,7 +33,10 @@ fn main() {
             }
         };
     print!("calibrating...  ");
-    let amp = calibrate::calc_amplitude(&calibrator).unwrap();
+    let amp = match calibrate::calc_amplitude(&calibrator) {
+         Result::Ok(val) => val,
+         Result::Err(err) => handle_cali_error(err),
+    };
     println!("done");
     println!("amplitude = {}", amp);
 
@@ -162,4 +165,18 @@ fn main() {
             _ => println!("no output"),
         };
     });
+}
+
+//Print a message relevent to the error made during calibration
+fn handle_cali_error(error: calibrate::CalibrationError) -> ! {
+    match error {
+        calibrate::CalibrationError::CreationError(err) => 
+            println!("Failed to build event loop due to {:?}", err),
+        calibrate::CalibrationError::DefaultFormatError(err) => 
+            println!("Failed to find default format of calibrator due to {:?}", err),
+        calibrate::CalibrationError::PoisonError => println!("Input gathering thread paniced"),
+        calibrate::CalibrationError::ReadError => println!("Gathered no samples after 1 second."),
+    }
+    println!("Calibration failed. Exiting");
+    std::process::exit(1)
 }

@@ -1,11 +1,11 @@
 use cpal::*;
 use std::thread;
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc};
 use std::collections::VecDeque;
 
 mod calibrate;
 
-const DELAY: f32 = 0.18; //Delay in seconds, found through experimentation
+const DELAY: u64 = 180; //Delay in milliseconds, found through experimentation
 
 ///Take audio from the device's current default input and output a phase-reversed
 /// version to default audio output, creating a noise-cancelling effect. 
@@ -66,13 +66,21 @@ fn main() {
     });
 
     //Number of samples to delay for
-    let delay_samples = (DELAY * samp_rate as f32).floor() as usize;
+    //let delay_samples = (DELAY * samp_rate as f32).floor() as usize;
 
-    let mut buf: VecDeque<f32> = VecDeque::new(); //Buffer of input samples
+    let mut buf: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
+    let buf_clone = buf.clone();
+    thread::spawn(move || {
+        loop {
+            let elem = rx.recv().expect("Failed to receive to buffer");
+            buf_clone.lock().unwrap().push_back(elem);
+        }
+    });
+    //let mut buf: VecDeque<f32> = VecDeque::new(); //Buffer of input samples
     //Build buffer up to input size
-    for _ in 0..delay_samples {
-        buf.push_back(rx.recv().expect("failed to build buffer"));
-    }
+    //for _ in 0..delay_samples {
+    //    buf.push_back(rx.recv().expect("failed to build buffer"));
+    //}
 
     let default_out = default_output_device().expect("Error finding default output");
     let event_loop_out = EventLoop::new();
@@ -81,16 +89,17 @@ fn main() {
             .expect("Failed to build output stream");
     event_loop_out.play_stream(output);
 
+    thread::sleep(std::time::Duration::from_millis(DELAY));
     event_loop_out.run(move |_, stream_data| {
         //Output audio in u16, i16, or f32 format
         match stream_data {
             StreamData::Output { buffer: UnknownTypeOutputBuffer::U16(mut buffer) } => {
                 for elem in buffer.iter_mut() {
-                    match buf.pop_front() {
+                    match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = (-i * amp) as u16,
                         None => *elem = 0, //Silently drop the sample if buffer is empty 
                     }
-                    buf.push_back(rx.recv().expect("receive failed on push in event loop"));
+                    //buf.push_back(rx.recv().expect("receive failed on push in event loop"));
                     //*elem = -buf.pop_front().expect("pop failed in u16") as u16;
                     //*elem = -rx.recv().expect("pop failed in u16") as u16;
                     //println!("output {:?}", elem);
@@ -99,11 +108,11 @@ fn main() {
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
                 for elem in buffer.iter_mut() {
-                    match buf.pop_front() {
+                    match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = (-i * amp) as i16,
-                        None => (),
+                        None => *elem = 0_i16,
                     }
-                    buf.push_back(rx.recv().expect("receive failed on push in event loop"));
+                    //buf.push_back(rx.recv().expect("receive failed on push in event loop"));
                     //*elem = -buf.pop_front().expect("pop failed in i16") as i16;
                     //*elem = -rx.recv().expect("pop failed in u16") as i16;
                     //println!("output {:?}", elem);
@@ -112,11 +121,11 @@ fn main() {
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
                 for elem in buffer.iter_mut() {
-                    match buf.pop_front() {
+                    match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = -i * amp,
-                        None => println!("no input"),
+                        None => *elem = 0.0_f32,
                     }
-                    buf.push_back(rx.recv().expect("receive failed on push in event loop"));
+                    //buf.push_back(rx.recv().expect("receive failed on push in event loop"));
                     //*elem = -buf.pop_front().expect("pop failed in f32 section");
                     //*elem = -rx.recv().expect("pop failed in u16");
                     //println!("output {:?}", elem);

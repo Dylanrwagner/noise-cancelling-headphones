@@ -68,7 +68,7 @@ fn main() {
     //Number of samples to delay for
     //let delay_samples = (DELAY * samp_rate as f32).floor() as usize;
 
-    let mut buf: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
+    let buf: Arc<Mutex<VecDeque<f32>>> = Arc::new(Mutex::new(VecDeque::new()));
     let buf_clone = buf.clone();
     thread::spawn(move || {
         loop {

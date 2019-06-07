@@ -33,7 +33,7 @@ fn main() {
             }
         };
     print!("calibrating...  ");
-    let amp = calibrate::calc_amplitude(&calibrator);
+    let amp = calibrate::calc_amplitude(&calibrator).unwrap();
     println!("done");
     println!("amplitude = {}", amp);
 

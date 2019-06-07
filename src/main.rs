@@ -1,14 +1,14 @@
 use cpal::*;
-use std::thread;
-use std::sync::{Arc, Mutex, mpsc};
 use std::collections::VecDeque;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 
 mod calibrate;
 
 const DELAY: u64 = 180; //Delay in milliseconds, found through experimentation
 
 ///Take audio from the device's current default input and output a phase-reversed
-/// version to default audio output, creating a noise-cancelling effect. 
+/// version to default audio output, creating a noise-cancelling effect.
 /// Requires an additional input device inside the headphones to calculate delay and amplitude
 
 fn main() {
@@ -17,49 +17,66 @@ fn main() {
 
     //set up default input device, which will act as the means to cancel the noise
     let default_in = default_input_device().expect("Error finding default input");
-    let in_format = default_in.default_input_format().expect("Error getting default input format");
+    let in_format = default_in
+        .default_input_format()
+        .expect("Error getting default input format");
     //let SampleRate(samp_rate) = in_format.sample_rate;
 
     //A second input device inside the headphones to find some noise-cancelling parameters
     // assumes it, the default input device, and the built-in mic are the only input devices
-    let calibrator = input_devices()
-        .find(|x| { x.name() != "Built-in Microphone" && *x != default_in})
-        .unwrap();
+    let calibrator =
+        match input_devices().find(|x| x.name() != "Built-in Microphone" && *x != default_in) {
+            Some(d) => d,
+            None => {
+                println!("error: requires microphone other than default input and built-in mic");
+                std::process::exit(1);
+            }
+        };
     print!("calibrating...  ");
     let amp = calibrate::calc_amplitude(&calibrator);
     println!("done");
+    println!("amplitude = {}", amp);
 
     //Spawn thread that reads input and sends it to output thread
     thread::spawn(move || {
         let event_loop_in = EventLoop::new();
-        let input = event_loop_in.build_input_stream(&default_in, &in_format)
-                .expect("Error building input stream");
+        let input = event_loop_in
+            .build_input_stream(&default_in, &in_format)
+            .expect("Error building input stream");
         event_loop_in.play_stream(input.to_owned());
 
         event_loop_in.run(move |_, stream_data| {
             //catch input in u16, i16, or f32 format
             match stream_data {
-                StreamData::Input { buffer: UnknownTypeInputBuffer::U16(buffer) } => {
+                StreamData::Input {
+                    buffer: UnknownTypeInputBuffer::U16(buffer),
+                } => {
                     for elem in buffer.iter() {
-                        tx.send(*elem as f32).expect("input thread failed on send u16");
+                        tx.send(*elem as f32)
+                            .expect("input thread failed on send u16");
                     }
                     println!("input U16");
                     //println!();
-                },
-                StreamData::Input { buffer: UnknownTypeInputBuffer::I16(buffer) } => {
+                }
+                StreamData::Input {
+                    buffer: UnknownTypeInputBuffer::I16(buffer),
+                } => {
                     for elem in buffer.iter() {
-                        tx.send(*elem as f32).expect("input thread failed on send i16");
+                        tx.send(*elem as f32)
+                            .expect("input thread failed on send i16");
                     }
                     println!("input I16");
                     //println!();
-                },
-                StreamData::Input { buffer: UnknownTypeInputBuffer::F32(buffer) } => {
+                }
+                StreamData::Input {
+                    buffer: UnknownTypeInputBuffer::F32(buffer),
+                } => {
                     for elem in buffer.iter() {
                         tx.send(*elem).expect("input thread failed on send f32");
                     }
                     println!("input F32");
                     //println!();
-                },
+                }
                 _ => println!("no input"),
             };
         });
@@ -72,6 +89,7 @@ fn main() {
     let buf_clone = buf.clone();
     thread::spawn(move || {
         loop {
+            //not one line because that would cause this thread to hold the lock too much
             let elem = rx.recv().expect("Failed to receive to buffer");
             buf_clone.lock().unwrap().push_back(elem);
         }
@@ -84,20 +102,25 @@ fn main() {
 
     let default_out = default_output_device().expect("Error finding default output");
     let event_loop_out = EventLoop::new();
-    let out_format = default_out.default_output_format().expect("Error getting default output format");
-    let output = event_loop_out.build_output_stream(&default_out, &out_format)
-            .expect("Failed to build output stream");
+    let out_format = default_out
+        .default_output_format()
+        .expect("Error getting default output format");
+    let output = event_loop_out
+        .build_output_stream(&default_out, &out_format)
+        .expect("Failed to build output stream");
     event_loop_out.play_stream(output);
 
     thread::sleep(std::time::Duration::from_millis(DELAY));
     event_loop_out.run(move |_, stream_data| {
         //Output audio in u16, i16, or f32 format
         match stream_data {
-            StreamData::Output { buffer: UnknownTypeOutputBuffer::U16(mut buffer) } => {
+            StreamData::Output {
+                buffer: UnknownTypeOutputBuffer::U16(mut buffer),
+            } => {
                 for elem in buffer.iter_mut() {
                     match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = (-i * amp) as u16,
-                        None => *elem = 0, //Silently drop the sample if buffer is empty 
+                        None => *elem = 0, //Silently drop the sample if buffer is empty
                     }
                     //buf.push_back(rx.recv().expect("receive failed on push in event loop"));
                     //*elem = -buf.pop_front().expect("pop failed in u16") as u16;
@@ -105,8 +128,10 @@ fn main() {
                     //println!("output {:?}", elem);
                 }
                 println!("Output u16");
-            },
-            StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
+            }
+            StreamData::Output {
+                buffer: UnknownTypeOutputBuffer::I16(mut buffer),
+            } => {
                 for elem in buffer.iter_mut() {
                     match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = (-i * amp) as i16,
@@ -118,8 +143,10 @@ fn main() {
                     //println!("output {:?}", elem);
                 }
                 println!("Output i16");
-            },
-            StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
+            }
+            StreamData::Output {
+                buffer: UnknownTypeOutputBuffer::F32(mut buffer),
+            } => {
                 for elem in buffer.iter_mut() {
                     match buf.lock().unwrap().pop_front() {
                         Some(i) => *elem = -i * amp,
@@ -131,7 +158,7 @@ fn main() {
                     //println!("output {:?}", elem);
                 }
                 println!("output f32");
-            },
+            }
             _ => println!("no output"),
         };
     });
